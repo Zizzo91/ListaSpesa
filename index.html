@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lista Spesa">
+<title>Lista Spesa</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon.png">
+<style>
+  :root{
+    --bg:#0f1115; --bg2:#141821; --surface:#1a1f2b; --surface2:#222937;
+    --line:#2a3142; --text:#eef2f8; --muted:#8b94a7; --accent:#f5a524;
+    --accent2:#ff7a59; --ok:#4ade80; --danger:#f87171;
+    --top:60px; --bottom:calc(72px + env(safe-area-inset-bottom));
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #1b2230 0%, var(--bg) 55%) fixed;
+    color:var(--text); font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100dvh; overscroll-behavior-y:none;
+  }
+  button{font:inherit; color:inherit; background:none; border:0; cursor:pointer}
+  input{font:inherit}
+
+  /* ── Topbar ── */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:30; min-height:var(--top);
+    display:flex; align-items:center; gap:10px;
+    padding:calc(env(safe-area-inset-top) + 8px) 14px 8px;
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:9px; margin-right:auto; min-width:0}
+  .brand .logo{font-size:22px; filter:drop-shadow(0 2px 6px rgba(245,165,36,.35))}
+  .brand h1{font-size:18px; margin:0; font-weight:700; letter-spacing:.2px; white-space:nowrap}
+  .brand .sub{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .icon-btn{
+    width:40px; height:40px; border-radius:12px; display:grid; place-items:center;
+    background:var(--surface); border:1px solid var(--line); font-size:17px;
+    transition:transform .12s, background .15s;
+  }
+  .icon-btn:active{transform:scale(.92); background:var(--surface2)}
+  .net{position:absolute; bottom:-1px; left:0; height:2px; width:0; background:var(--accent); transition:width .3s}
+  .net.offline{width:100%; background:var(--danger)}
+
+  /* ── List ── */
+  main{padding:calc(var(--top) + env(safe-area-inset-top) + 6px) 12px var(--bottom)}
+  .empty{color:var(--muted); text-align:center; padding:64px 18px; line-height:1.7}
+  .empty-hint{font-size:13px; color:#6b7488; display:inline-block; margin-top:6px}
+  .empty::before{content:"🛒"; display:block; font-size:44px; margin-bottom:14px; opacity:.55}
+
+  .cat-group{margin-bottom:6px}
+  .cat-title{
+    position:sticky; top:calc(var(--top) + env(safe-area-inset-top));
+    z-index:8; display:flex; align-items:center; gap:8px;
+    margin:0; padding:12px 6px 8px; font-size:12.5px; font-weight:700;
+    letter-spacing:.7px; text-transform:uppercase; color:var(--muted);
+    background:linear-gradient(var(--bg) 62%, transparent);
+    backdrop-filter:blur(2px);
+  }
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--c,var(--muted)); box-shadow:0 0 0 3px color-mix(in srgb, var(--c,var(--muted)) 22%, transparent)}
+  .cat-count{margin-left:auto; font-size:11px; color:#5f6879; background:var(--surface); border:1px solid var(--line); padding:1px 8px; border-radius:20px}
+
+  .item{
+    display:flex; align-items:center; gap:12px; padding:12px 12px 12px 14px; margin:6px 0;
+    background:linear-gradient(180deg, var(--surface), var(--bg2));
+    border:1px solid var(--line); border-radius:var(--radius);
+    transition:transform .1s, border-color .2s, opacity .2s;
+  }
+  .item:active{transform:scale(.988)}
+  .item.flash{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%, transparent)}
+  .check{
+    flex:none; width:28px; height:28px; border-radius:50%; border:2px solid #46506a;
+    display:grid; place-items:center; transition:all .18s; position:relative;
+  }
+  .check::after{content:""; width:13px; height:7px; border-left:2.5px solid #0f1115; border-bottom:2.5px solid #0f1115; transform:rotate(-45deg) scale(0); transition:transform .18s; margin-top:-3px}
+  .item.checked .check{background:var(--ok); border-color:var(--ok)}
+  .item.checked .check::after{transform:rotate(-45deg) scale(1)}
+  .item-body{min-width:0; flex:1; display:flex; flex-direction:column; gap:3px}
+  .item-name{font-size:16.5px; line-height:1.25; word-break:break-word}
+  .item-name .qty{font-size:13px; color:var(--accent); font-weight:600; margin-left:2px}
+  .cat-chip{
+    align-self:flex-start; display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; color:var(--muted); padding:2px 8px 2px 6px; border-radius:20px;
+    background:color-mix(in srgb, var(--c) 14%, transparent);
+    border:1px solid color-mix(in srgb, var(--c) 35%, var(--line));
+  }
+  .cat-chip:active{background:color-mix(in srgb, var(--c) 26%, transparent)}
+  .item.checked .item-name{color:var(--muted); text-decoration:line-through}
+  .del{flex:none; width:34px; height:34px; border-radius:10px; color:#626c81; font-size:15px}
+  .del:active{background:color-mix(in srgb,var(--danger) 18%, transparent); color:var(--danger)}
+
+  .bought-head{display:flex; gap:8px; align-items:stretch; margin:18px 0 6px}
+  .bought-toggle{
+    flex:1; padding:12px; border-radius:12px; text-align:left;
+    color:var(--muted); background:var(--surface); border:1px dashed var(--line);
+    font-weight:600; font-size:14px;
+  }
+  .bought-toggle:active{background:var(--surface2)}
+  .bought-clear{
+    flex:none; padding:12px 14px; border-radius:12px; font-size:14px; font-weight:700;
+    color:var(--danger); background:color-mix(in srgb,var(--danger) 12%, var(--surface));
+    border:1px solid color-mix(in srgb,var(--danger) 38%, var(--line));
+  }
+  .bought-clear:active{transform:scale(.97); background:color-mix(in srgb,var(--danger) 22%, var(--surface))}
+  .bought-wrap{opacity:.85}
+
+  /* ── Add bar (bottom) ── */
+  .addbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    background:color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter:saturate(160%) blur(14px); border-top:1px solid var(--line);
+  }
+  .add-row{display:flex; gap:8px; align-items:center}
+  .add-row input{
+    flex:1; min-width:0; height:50px; padding:0 16px; border-radius:14px;
+    background:var(--surface); border:1px solid var(--line); color:var(--text); outline:none;
+  }
+  .add-row input:focus{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%, transparent)}
+  .add-btn{
+    flex:none; width:50px; height:50px; border-radius:14px; font-size:26px; font-weight:400;
+    background:linear-gradient(180deg, var(--accent), var(--accent2)); color:#1a1206;
+    display:grid; place-items:center; box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 32%, transparent);
+  }
+  .add-btn:active{transform:scale(.94)}
+  .cat-preview{
+    display:flex; align-items:center; gap:7px; padding:6px 4px 0; font-size:12.5px; color:var(--muted);
+  }
+
+  /* ── Dup banner ── */
+  .dup-banner{
+    position:fixed; left:10px; right:10px; bottom:var(--bottom); z-index:35;
+    margin-bottom:8px; padding:14px 14px;
+    background:linear-gradient(180deg,#23293a,#1b2130);
+    border:1px solid color-mix(in srgb,var(--accent) 45%, var(--line));
+    border-radius:16px; box-shadow:0 12px 30px rgba(0,0,0,.5);
+    animation:rise .22s ease;
+  }
+  @keyframes rise{from{transform:translateY(14px); opacity:0} to{transform:none; opacity:1}}
+  .dup-text{font-size:14.5px; margin-bottom:12px; line-height:1.4}
+  .dup-actions{display:flex; gap:8px; flex-wrap:wrap}
+  .dup-actions button{
+    padding:10px 14px; border-radius:11px; font-size:14px; font-weight:600; border:1px solid var(--line);
+    background:var(--surface);
+  }
+  .dup-actions button[data-act="add"]{background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#1a1206; border-color:transparent}
+  .dup-actions button:active{transform:scale(.96)}
+
+  /* ── Sheet ── */
+  .sheet{position:fixed; inset:0; z-index:50; background:rgba(6,8,12,.6); display:flex; align-items:flex-end; opacity:0; transition:opacity .18s}
+  .sheet.show{opacity:1}
+  .sheet-inner{
+    width:100%; max-height:82dvh; overflow:auto; padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,#1c2230,#12161f); border-top:1px solid var(--line);
+    border-radius:22px 22px 0 0; transform:translateY(20px); transition:transform .2s;
+  }
+  .sheet.show .sheet-inner{transform:none}
+  .sheet-head{display:flex; align-items:center; font-size:16px; font-weight:700; margin-bottom:14px}
+  .sheet-x{margin-left:auto; width:34px; height:34px; border-radius:10px; background:var(--surface); border:1px solid var(--line)}
+  .cat-picker{display:grid; gap:8px}
+  .cat-option{display:flex; align-items:center; gap:10px; padding:13px 14px; border-radius:13px; background:var(--surface); border:1px solid var(--line); text-align:left}
+  .cat-option.active{border-color:var(--c); background:color-mix(in srgb,var(--c) 16%, var(--surface))}
+  .cat-option:active{transform:scale(.99)}
+
+  .edit-form{display:flex; flex-direction:column; gap:14px}
+  .edit-form label{display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted)}
+  .edit-form input{height:48px; padding:0 14px; border-radius:12px; background:var(--surface); border:1px solid var(--line); color:var(--text); outline:none}
+  .edit-form input:focus{border-color:var(--accent)}
+  .row2{display:flex; gap:10px}
+  .row2 label{flex:1}
+  .edit-actions{display:flex; gap:10px; margin-top:4px}
+  .btn{flex:1; height:48px; border-radius:13px; font-weight:700; font-size:15px}
+  .btn.primary{background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#1a1206}
+  .btn.danger{background:color-mix(in srgb,var(--danger) 16%, var(--surface)); color:var(--danger); border:1px solid color-mix(in srgb,var(--danger) 40%, var(--line))}
+  .btn:active{transform:scale(.97)}
+
+  .menu{display:grid; gap:8px}
+  .menu-item{padding:15px 14px; border-radius:13px; background:var(--surface); border:1px solid var(--line); text-align:left; font-size:15px}
+  .menu-item:active{background:var(--surface2)}
+  .menu-item.danger{color:var(--danger)}
+  .menu-note{margin-top:6px; font-size:12px; color:var(--muted); text-align:center}
+  .menu-note code{background:var(--surface); padding:2px 6px; border-radius:6px}
+
+  /* ── Toast ── */
+  .toast{
+    position:fixed; left:50%; bottom:calc(var(--bottom) + 8px); transform:translate(-50%,20px);
+    z-index:60; padding:11px 18px; border-radius:30px; font-size:14px; font-weight:600;
+    background:#eef2f8; color:#12161f; box-shadow:0 10px 30px rgba(0,0,0,.45);
+    opacity:0; pointer-events:none; transition:all .22s; max-width:88vw; text-align:center;
+  }
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🛒</span>
+    <div style="min-width:0">
+      <h1>Lista Spesa</h1>
+      <div class="sub" id="subtitle">—</div>
+    </div>
+  </div>
+  <button class="icon-btn" id="shareBtn" aria-label="Condividi">🔗</button>
+  <button class="icon-btn" id="menuBtn" aria-label="Menu">⋯</button>
+  <div class="net" id="netBadge"></div>
+</header>
+
+<main>
+  <div id="list"></div>
+</main>
+
+<div class="dup-banner hidden" id="dupBanner">
+  <div class="dup-text"></div>
+  <div class="dup-actions">
+    <button data-act="add">Aggiungi comunque</button>
+    <button data-act="goto">Vai all'articolo</button>
+    <button data-act="cancel">Annulla</button>
+  </div>
+</div>
+
+<div class="addbar">
+  <div class="add-row">
+    <input id="addInput" type="text" inputmode="text" autocomplete="off"
+           enterkeyhint="done" placeholder="Aggiungi prodotto (es. 2 kg mele)">
+    <button class="add-btn" id="addBtn" aria-label="Aggiungi">＋</button>
+  </div>
+  <div class="cat-preview hidden" id="catPreview"></div>
+</div>
+
+<div class="sheet hidden" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config/supabase-config.js"></script>
+<script src="data/categories.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+
+  const SCHEMA = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.schema) || "spesa";
+  const ITEMS_KEY = () => "spesa.items." + roomId;
+  const CAT_KEY = () => "spesa.catalog." + roomId;
+  const OB_KEY = () => "spesa.outbox." + roomId;
+
+  let sdk = null, roomId = null;
+  let items = [];            // articoli (source of truth per la UI)
+  let catalog = {};          // norm_name -> categoria (appreso)
+  let boughtOpen = false;
+  let pendingDup = null;
+  let realtimeChannel = null;
+
+  // ── utils ──────────────────────────────────────────────────────
+  const nowISO = () => new Date().toISOString();
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const escapeAttr = escapeHtml;
+  function uuid() {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0, v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  let toastTimer = null;
+  function toast(msg) {
+    const el = $("#toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 1900);
+  }
+  function setNet(offline) {
+    $("#netBadge").className = "net" + (offline ? " offline" : "");
+  }
+
+  // ── Supabase ───────────────────────────────────────────────────
+  function getSupabase() {
+    if (sdk) return sdk;
+    const cfg = window.SUPABASE_CONFIG;
+    if (!cfg || !window.supabase || !window.supabase.createClient) return null;
+    sdk = window.supabase.createClient(cfg.url, cfg.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+      db: { schema: SCHEMA }
+    });
+    return sdk;
+  }
+
+  // ── room ───────────────────────────────────────────────────────
+  function initRoom() {
+    const params = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    const fromHash = params.get("r");
+    const stored = localStorage.getItem("spesa.room");
+    if (fromHash && UUID_RE.test(fromHash)) roomId = fromHash;
+    else if (stored && UUID_RE.test(stored)) roomId = stored;
+    else roomId = uuid();
+    localStorage.setItem("spesa.room", roomId);
+  }
+
+  // ── cache + outbox ─────────────────────────────────────────────
+  function loadCache() {
+    try { items = JSON.parse(localStorage.getItem(ITEMS_KEY())) || []; } catch (e) { items = []; }
+    try { catalog = JSON.parse(localStorage.getItem(CAT_KEY())) || {}; } catch (e) { catalog = {}; }
+  }
+  const persistItems = () => localStorage.setItem(ITEMS_KEY(), JSON.stringify(items));
+  const persistCatalog = () => localStorage.setItem(CAT_KEY(), JSON.stringify(catalog));
+  function readOutbox() {
+    try { return JSON.parse(localStorage.getItem(OB_KEY())) || { upserts: {}, deletes: [] }; }
+    catch (e) { return { upserts: {}, deletes: [] }; }
+  }
+  function writeOutbox(o) { localStorage.setItem(OB_KEY(), JSON.stringify(o)); }
+  function queueUpsert(row) {
+    const o = readOutbox(); o.upserts[row.id] = row; o.deletes = o.deletes.filter((x) => x !== row.id); writeOutbox(o);
+  }
+  function queueDelete(id) {
+    const o = readOutbox(); delete o.upserts[id]; if (!o.deletes.includes(id)) o.deletes.push(id); writeOutbox(o);
+  }
+
+  let flushTimer = null, flushing = false;
+  function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(flush, 700); }
+  async function flush() {
+    if (flushing) return;
+    const d = getSupabase(); if (!d) return;
+    let o = readOutbox();
+    const rows = Object.values(o.upserts);
+    if (!rows.length && !o.deletes.length) { return; }
+    flushing = true;
+    try {
+      if (rows.length) {
+        const { error } = await d.from("items").upsert(rows);
+        if (error) throw error;
+        // Ri-leggi: nel frattempo l'utente può aver modificato l'outbox.
+        const fresh = readOutbox();
+        rows.forEach((r) => { const cur = fresh.upserts[r.id]; if (cur && cur.updated_at === r.updated_at) delete fresh.upserts[r.id]; });
+        writeOutbox(fresh);
+      }
+      o = readOutbox();
+      if (o.deletes.length) {
+        const ids = o.deletes.slice();
+        const { error } = await d.from("items").delete().in("id", ids);
+        if (error) throw error;
+        const fresh = readOutbox();
+        fresh.deletes = fresh.deletes.filter((x) => !ids.includes(x));
+        writeOutbox(fresh);
+      }
+      setNet(false);
+    } catch (e) {
+      setNet(true);
+    } finally {
+      flushing = false;
+      const rest = readOutbox();
+      if (Object.keys(rest.upserts).length || rest.deletes.length) scheduleFlush();
+    }
+  }
+
+  // ── pull cloud ─────────────────────────────────────────────────
+  let pullTimer = null;
+  function schedulePull() { clearTimeout(pullTimer); pullTimer = setTimeout(syncPull, 400); }
+  async function syncPull() {
+    const d = getSupabase(); if (!d) { setNet(true); render(); return; }
+    try {
+      const [it, cat] = await Promise.all([
+        d.from("items").select("*").eq("room_id", roomId).order("position", { ascending: true }),
+        d.from("catalog").select("norm_name,category").eq("room_id", roomId)
+      ]);
+      if (!it.error) {
+        const o = readOutbox();
+        const map = {};
+        (it.data || []).forEach((r) => { map[r.id] = r; });
+        Object.values(o.upserts).forEach((r) => { map[r.id] = r; });
+        o.deletes.forEach((id) => { delete map[id]; });
+        items = Object.values(map);
+        persistItems();
+        setNet(false);
+      } else { setNet(true); }
+      if (!cat.error && cat.data) {
+        const cloudCat = {};
+        cat.data.forEach((r) => { cloudCat[r.norm_name] = r.category; });
+        catalog = Object.assign({}, cloudCat, catalog);
+        persistCatalog();
+      }
+      render();
+    } catch (e) { setNet(true); render(); }
+  }
+
+  function subscribe() {
+    const d = getSupabase(); if (!d) return;
+    if (realtimeChannel) { try { d.removeChannel(realtimeChannel); } catch (e) {} }
+    realtimeChannel = d.channel("spesa-" + roomId)
+      .on("postgres_changes",
+        { event: "*", schema: SCHEMA, table: "items", filter: "room_id=eq." + roomId },
+        () => schedulePull())
+      .subscribe();
+  }
+
+  // ── mutazioni ──────────────────────────────────────────────────
+  const nextPos = () => items.reduce((m, it) => Math.max(m, it.position || 0), 0) + 1;
+
+  function addItem(name, qty, unit) {
+    const key = SPESA.normalize(name);
+    const cat = catalog[key] || SPESA.categorize(name);
+    const row = {
+      id: uuid(), room_id: roomId, name: name, category: cat,
+      quantity: qty || 1, unit: unit || "", checked: false,
+      position: nextPos(), created_at: nowISO(), updated_at: nowISO()
+    };
+    items.push(row); persistItems(); queueUpsert(row); render(); scheduleFlush();
+    toast("Aggiunto: " + name);
+  }
+  function toggleItem(id) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    it.checked = !it.checked; it.updated_at = nowISO();
+    persistItems(); queueUpsert(it); render(); scheduleFlush();
+    if (navigator.vibrate) navigator.vibrate(it.checked ? 12 : 8);
+  }
+  function deleteItem(id) {
+    items = items.filter((x) => x.id !== id);
+    persistItems(); queueDelete(id); render(); scheduleFlush();
+  }
+  function updateItemFields(id, patch) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    Object.assign(it, patch); it.updated_at = nowISO();
+    persistItems(); queueUpsert(it); render(); scheduleFlush();
+  }
+  async function setCategory(id, cat) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    it.category = cat; it.updated_at = nowISO();
+    persistItems(); queueUpsert(it); render(); scheduleFlush();
+    const key = SPESA.normalize(it.name);
+    catalog[key] = cat; persistCatalog();
+    const d = getSupabase();
+    if (d) { try { await d.from("catalog").upsert({ room_id: roomId, norm_name: key, display_name: it.name, category: cat, updated_at: nowISO() }, { onConflict: "room_id,norm_name" }); } catch (e) {} }
+    toast("Categoria: " + cat);
+  }
+  function incrementExisting(ex, qty, unit) {
+    ex.quantity = (Number(ex.quantity) || 0) + (qty || 1);
+    if (unit && !ex.unit) ex.unit = unit;
+    ex.updated_at = nowISO();
+    persistItems(); queueUpsert(ex); render(); scheduleFlush();
+    toast("Quantità aggiornata: " + ex.name);
+  }
+  function clearChecked() {
+    const ids = items.filter((i) => i.checked).map((i) => i.id);
+    if (!ids.length) { toast("Nessun comprato"); return; }
+    if (!confirm("Rimuovere " + ids.length + " articoli comprati?")) return;
+    items = items.filter((i) => !i.checked);
+    persistItems(); ids.forEach(queueDelete); render(); scheduleFlush(); toast("Comprati rimossi");
+  }
+  function clearAll() {
+    if (!items.length) { toast("Lista già vuota"); return; }
+    if (!confirm("Svuotare tutta la lista (" + items.length + " articoli)?")) return;
+    const ids = items.map((i) => i.id);
+    items = [];
+    persistItems(); ids.forEach(queueDelete); render(); scheduleFlush(); toast("Lista svuotata");
+  }
+
+  // ── parsing input ──────────────────────────────────────────────
+  function parseInput(raw) {
+    let s = String(raw || "").trim();
+    let qty = 1, unit = "";
+    let m = s.match(/^(\d+(?:[.,]\d+)?)\s*([a-zA-ZÀ-ÿ]{1,8})?\s+(.+)$/);
+    if (m) {
+      qty = parseFloat(m[1].replace(",", "."));
+      unit = (m[2] || "").toLowerCase();
+      s = m[3].trim();
+    } else {
+      const m2 = s.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zA-ZÀ-ÿ]{1,8})?$/);
+      if (m2) { s = m2[1].trim(); qty = parseFloat(m2[2].replace(",", ".")); unit = (m2[3] || "").toLowerCase(); }
+    }
+    if (!isFinite(qty) || qty <= 0) qty = 1;
+    return { name: s.trim(), qty: qty, unit: unit };
+  }
+  function fmtQty(it) {
+    const q = Number(it.quantity) || 0;
+    const n = (q % 1 === 0) ? String(q) : q.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    return it.unit ? (n + " " + it.unit) : ("×" + n);
+  }
+  function findExisting(name) {
+    const n = SPESA.normalize(name);
+    return items.find((it) => SPESA.normalize(it.name) === n) || null;
+  }
+
+  // ── add flow ───────────────────────────────────────────────────
+  function tryAdd(raw) {
+    const p = parseInput(raw);
+    if (!p.name) return;
+    const ex = findExisting(p.name);
+    if (ex) { pendingDup = { p: p, ex: ex }; showDup(p, ex); return; }
+    hideDup();
+    addItem(p.name, p.qty, p.unit);
+    clearInput();
+  }
+  function showDup(p, ex) {
+    const b = $("#dupBanner");
+    const suffix = ex.checked ? " (già comprato)" : "";
+    b.querySelector(".dup-text").innerHTML =
+      "«" + escapeHtml(ex.name) + "» è già in lista" + suffix + ". Cosa vuoi fare?";
+    b.classList.remove("hidden");
+  }
+  function hideDup() { pendingDup = null; $("#dupBanner").classList.add("hidden"); }
+  function clearInput() { $("#addInput").value = ""; updatePreview(); $("#addInput").focus(); }
+  function scrollToItem(id) {
+    const el = $('.item[data-id="' + id + '"]');
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1300);
+  }
+
+  // ── render ─────────────────────────────────────────────────────
+  function render() {
+    const list = $("#list");
+    const active = {}, bought = [];
+    items.forEach((it) => {
+      if (it.checked) bought.push(it);
+      else (active[it.category] = active[it.category] || []).push(it);
+    });
+    const nActive = items.length - bought.length;
+
+    let html = "";
+    if (!items.length) {
+      html = '<div class="empty">La lista è vuota.<br>Aggiungi un prodotto qui sotto.' +
+        '<span class="empty-hint">Prova: “2 kg mele”, “detersivo piatti”, “finocchi”.</span></div>';
+    } else {
+      SPESA.categories.forEach((cat) => {
+        const arr = active[cat];
+        if (!arr || !arr.length) return;
+        arr.sort((a, b) => (a.position || 0) - (b.position || 0));
+        const color = SPESA.colors[cat] || "#94a3b8";
+        html += '<section class="cat-group">' +
+          '<h2 class="cat-title" style="--c:' + color + '"><span class="dot"></span>' + escapeHtml(cat) +
+          '<span class="cat-count">' + arr.length + '</span></h2>' +
+          arr.map((it) => itemHtml(it)).join("") +
+          '</section>';
+      });
+      if (nActive === 0 && !bought.length) html = "";
+    }
+
+    if (bought.length) {
+      bought.sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+      html += '<div class="bought-head">' +
+        '<button class="bought-toggle" id="boughtToggle">' + (boughtOpen ? "▾" : "▸") +
+        " Comprati (" + bought.length + ")</button>" +
+        '<button class="bought-clear" id="clearBoughtBtn" title="Svuota lo storico">🗑 Svuota</button>' +
+        "</div>";
+      if (boughtOpen) {
+        html += '<div class="bought-wrap">' + bought.map((it) => itemHtml(it)).join("") + "</div>";
+      }
+    }
+    if (!html) html = '<div class="empty">Tutto comprato! 🎉</div>';
+
+    list.innerHTML = html;
+    $("#subtitle").textContent = nActive + " da comprare · " + bought.length + " comprati";
+  }
+
+  function itemHtml(it) {
+    const color = SPESA.colors[it.category] || "#94a3b8";
+    const showQty = (Number(it.quantity) !== 1) || it.unit;
+    const qty = showQty ? '<span class="qty">' + escapeHtml(fmtQty(it)) + "</span>" : "";
+    return '<div class="item' + (it.checked ? " checked" : "") + '" data-id="' + it.id + '">' +
+      '<button class="check" data-act="toggle" aria-label="Spunta"></button>' +
+      '<div class="item-body">' +
+      '<div class="item-name" data-act="edit">' + escapeHtml(it.name) + " " + qty + "</div>" +
+      '<button class="cat-chip" data-act="cat" style="--c:' + color + '"><span class="dot"></span>' +
+      escapeHtml(it.category) + "</button>" +
+      "</div>" +
+      '<button class="del" data-act="del" aria-label="Elimina">✕</button>' +
+      "</div>";
+  }
+
+  // ── sheets ─────────────────────────────────────────────────────
+  function openSheet(inner) {
+    const s = $("#sheet");
+    s.innerHTML = '<div class="sheet-inner">' + inner + "</div>";
+    s.classList.remove("hidden");
+    requestAnimationFrame(() => s.classList.add("show"));
+  }
+  function closeSheet() {
+    const s = $("#sheet");
+    s.classList.remove("show");
+    setTimeout(() => s.classList.add("hidden"), 180);
+  }
+
+  function openCategoryPicker(id) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    const inner = '<div class="sheet-head">Categoria di «' + escapeHtml(it.name) + '»' +
+      '<button class="sheet-x" data-close>✕</button></div><div class="cat-picker">' +
+      SPESA.categories.map((c) =>
+        '<button class="cat-option' + (c === it.category ? " active" : "") + '" data-cat="' + c +
+        '" style="--c:' + (SPESA.colors[c] || "#94a3b8") + '"><span class="dot"></span>' + escapeHtml(c) + "</button>"
+      ).join("") + "</div>";
+    openSheet(inner);
+    $$("#sheet .cat-option").forEach((b) => b.addEventListener("click", () => {
+      setCategory(id, b.dataset.cat); closeSheet();
+    }));
+  }
+
+  function openEdit(id) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    const inner = '<div class="sheet-head">Modifica articolo<button class="sheet-x" data-close>✕</button></div>' +
+      '<div class="edit-form">' +
+      '<label>Nome<input id="edName" value="' + escapeAttr(it.name) + '"></label>' +
+      '<div class="row2">' +
+      '<label>Quantità<input id="edQty" type="number" step="0.01" min="0" value="' + (Number(it.quantity) || 1) + '"></label>' +
+      '<label>Unità<input id="edUnit" placeholder="kg, pz…" value="' + escapeAttr(it.unit || "") + '"></label>' +
+      "</div>" +
+      '<div class="edit-actions"><button class="btn danger" id="edDel">Elimina</button>' +
+      '<button class="btn primary" id="edSave">Salva</button></div></div>';
+    openSheet(inner);
+    $("#edSave").addEventListener("click", () => {
+      const nm = $("#edName").value.trim(); if (!nm) return;
+      updateItemFields(id, {
+        name: nm,
+        quantity: parseFloat($("#edQty").value) || 1,
+        unit: $("#edUnit").value.trim()
+      });
+      closeSheet();
+    });
+    $("#edDel").addEventListener("click", () => {
+      closeSheet();
+      if (confirm("Eliminare «" + it.name + "»?")) deleteItem(id);
+    });
+  }
+
+  function openMenu() {
+    const inner = '<div class="sheet-head">Menu<button class="sheet-x" data-close>✕</button></div>' +
+      '<div class="menu">' +
+      '<button class="menu-item" id="mShare">🔗 Condividi / copia link</button>' +
+      '<button class="menu-item" id="mJoin">📥 Unisciti a un link</button>' +
+      '<button class="menu-item" id="mReload">↻ Ricarica dal cloud</button>' +
+      '<button class="menu-item" id="mClearChecked">🧹 Svuota comprati</button>' +
+      '<button class="menu-item danger" id="mClearAll">🗑 Svuota tutta la lista</button>' +
+      '<div class="menu-note">Stanza: <code>' + roomId.slice(0, 8) + "…</code></div></div>";
+    openSheet(inner);
+    $("#mShare").addEventListener("click", () => { closeSheet(); shareList(); });
+    $("#mJoin").addEventListener("click", () => { closeSheet(); setTimeout(joinFromLink, 200); });
+    $("#mReload").addEventListener("click", () => { closeSheet(); syncPull(); toast("Sincronizzato"); });
+    $("#mClearChecked").addEventListener("click", () => { closeSheet(); clearChecked(); });
+    $("#mClearAll").addEventListener("click", () => { closeSheet(); clearAll(); });
+  }
+
+  function listURL() { return location.origin + location.pathname + "#r=" + roomId; }
+  async function shareList() {
+    const url = listURL();
+    if (navigator.share) {
+      try { await navigator.share({ title: "Lista Spesa", text: "Unisciti alla mia lista della spesa", url: url }); return; }
+      catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(url); toast("Link copiato"); }
+    catch (e) { prompt("Copia il link della lista:", url); }
+  }
+  function joinFromLink() {
+    const v = prompt("Incolla il link di condivisione:");
+    if (!v) return;
+    const m = v.match(/r=([0-9a-f-]{36})/i);
+    if (!m) { toast("Link non valido"); return; }
+    location.hash = "r=" + m[1];
+    location.reload();
+  }
+
+  // ── input preview ──────────────────────────────────────────────
+  function updatePreview() {
+    const v = $("#addInput").value;
+    const pv = $("#catPreview");
+    if (!v.trim()) { pv.classList.add("hidden"); return; }
+    const p = parseInput(v);
+    const key = SPESA.normalize(p.name);
+    const cat = catalog[key] || SPESA.categorize(p.name);
+    const color = SPESA.colors[cat] || "#94a3b8";
+    const extra = (p.qty !== 1 || p.unit) ? " · " + fmtQty({ quantity: p.qty, unit: p.unit }) : "";
+    pv.innerHTML = '<span class="dot" style="--c:' + color + '"></span> ' + escapeHtml(cat) + escapeHtml(extra);
+    pv.classList.remove("hidden");
+  }
+
+  // ── eventi ─────────────────────────────────────────────────────
+  function bind() {
+    $("#addBtn").addEventListener("click", () => tryAdd($("#addInput").value));
+    $("#addInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); tryAdd($("#addInput").value); }
+      else if (e.key === "Escape") hideDup();
+    });
+    $("#addInput").addEventListener("input", updatePreview);
+    $("#shareBtn").addEventListener("click", shareList);
+    $("#menuBtn").addEventListener("click", openMenu);
+
+    $("#dupBanner").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-act]"); if (!b || !pendingDup) return;
+      const act = b.dataset.act;
+      if (act === "add") { incrementExisting(pendingDup.ex, pendingDup.p.qty, pendingDup.p.unit); hideDup(); clearInput(); }
+      else if (act === "goto") { const id = pendingDup.ex.id; hideDup(); clearInput(); scrollToItem(id); }
+      else if (act === "cancel") { hideDup(); clearInput(); }
+    });
+
+    $("#list").addEventListener("click", (e) => {
+      if (e.target.closest("#clearBoughtBtn")) { clearChecked(); return; }
+      if (e.target.closest("#boughtToggle")) { boughtOpen = !boughtOpen; render(); return; }
+      const act = e.target.closest("[data-act]"); if (!act) return;
+      const itemEl = e.target.closest(".item"); const id = itemEl && itemEl.dataset.id;
+      const a = act.dataset.act;
+      if (a === "toggle") toggleItem(id);
+      else if (a === "del") { const it = items.find((x) => x.id === id); if (it && confirm("Eliminare «" + it.name + "»?")) deleteItem(id); }
+      else if (a === "cat") openCategoryPicker(id);
+      else if (a === "edit") openEdit(id);
+    });
+
+    $("#sheet").addEventListener("click", (e) => {
+      if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet();
+    });
+
+    window.addEventListener("online", () => { setNet(false); flush(); syncPull(); });
+    window.addEventListener("offline", () => setNet(true));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncPull(); });
+    window.addEventListener("hashchange", () => location.reload());
+  }
+
+  // ── init ───────────────────────────────────────────────────────
+  async function init() {
+    initRoom();
+    loadCache();
+    bind();
+    render();
+    const d = getSupabase();
+    if (d) {
+      await syncPull();
+      subscribe();
+      flush();
+    } else {
+      setNet(true);
+    }
+    if ("serviceWorker" in navigator) {
+      try { await navigator.serviceWorker.register("sw.js"); } catch (e) {}
+    }
+    setInterval(() => { if (document.visibilityState === "visible") syncPull(); }, 25000);
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
